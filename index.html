@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>����� ����������</title>
+    <!-- Tailwind CSS CDN for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f7fafc;
+        }
+    </style>
+</head>
+<body>
+
+    <header class="bg-white shadow-md">
+        <div class="container mx-auto px-4 py-4">
+            <h1 class="text-2xl font-bold text-gray-800 text-center">����� ����������</h1>
+        </div>
+    </header>
+
+    <main class="py-8">
+        <div class="container mx-auto p-4 max-w-6xl">
+            <h2 class="text-4xl font-extrabold text-center text-gray-800 mb-8">
+                ���� ��������
+            </h2>
+
+            <!-- Loading spinner and message -->
+            <div id="loading-spinner" class="text-center py-16">
+                <div class="animate-spin rounded-full h-16 w-16 border-b-4 border-indigo-600 inline-block"></div>
+                <p class="mt-4 text-gray-500 text-lg">���� ����� ��������...</p>
+            </div>
+
+            <!-- Products container -->
+            <div id="products-container" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+                <!-- Products will be injected here by JavaScript -->
+            </div>
+
+            <!-- No products message -->
+            <div id="no-products-message" class="hidden text-center py-16">
+                <p class="text-gray-500 text-xl">�� ���� ������ �� ������ ������.</p>
+            </div>
+        </div>
+    </main>
+
+    <footer class="bg-white shadow-inner mt-8 py-4 text-center text-gray-500">
+        <div class="container mx-auto px-4">
+            <p>���� ��������: <span id="user-id" class="font-mono text-xs">...</span></p>
+        </div>
+    </footer>
+
+    <!-- Firebase SDKs -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // --- Firebase Configuration and Initialization ---
+        // Global variables provided by the Canvas environment.
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+
+        // Initialize Firebase App
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+
+        // HTML element references
+        const productsContainer = document.getElementById('products-container');
+        const loadingSpinner = document.getElementById('loading-spinner');
+        const noProductsMessage = document.getElementById('no-products-message');
+        const userIdElement = document.getElementById('user-id');
+
+        // Function to render products on the page
+        const renderProducts = (products) => {
+            productsContainer.innerHTML = ''; // Clear previous products
+            if (products.length > 0) {
+                products.forEach(product => {
+                    const productCard = document.createElement('div');
+                    productCard.className = 'bg-white rounded-lg shadow-lg overflow-hidden transform transition duration-300 hover:scale-105';
+                    productCard.innerHTML = `
+                        <img
+                            src="${product.imageUrl || 'https://placehold.co/600x400/E2E8F0/4A5568?text=����'}"
+                            alt="${product.name}"
+                            class="w-full h-56 object-cover"
+                            onerror="this.src='https://placehold.co/600x400/E2E8F0/4A5568?text=����';"
+                        />
+                        <div class="p-6 text-center">
+                            <h3 class="text-xl font-bold text-gray-900 mb-2">${product.name}</h3>
+                            <p class="text-gray-600 mb-4">${product.description || ''}</p>
+                            <p class="text-2xl font-bold text-indigo-600 mb-2">${product.price} ����</p>
+                            <p class="text-sm text-gray-500">��� ������: <span class="font-mono">${product.id}</span></p>
+                        </div>
+                    `;
+                    productsContainer.appendChild(productCard);
+                });
+                noProductsMessage.classList.add('hidden');
+            } else {
+                noProductsMessage.classList.remove('hidden');
+            }
+            loadingSpinner.classList.add('hidden');
+        };
+
+        // --- Firebase Authentication and Data Listener ---
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                userIdElement.textContent = user.uid;
+            } else {
+                try {
+                    if (initialAuthToken) {
+                        await signInWithCustomToken(auth, initialAuthToken);
+                        userIdElement.textContent = auth.currentUser?.uid || 'anonymous';
+                    } else {
+                        await signInAnonymously(auth);
+                        userIdElement.textContent = auth.currentUser?.uid || 'anonymous';
+                    }
+                } catch (error) {
+                    console.error("Error signing in:", error);
+                    userIdElement.textContent = 'anonymous';
+                }
+            }
+
+            // After authentication, start listening for real-time data
+            const productsCollectionPath = `artifacts/${appId}/public/data/products`;
+            const productsCollection = collection(db, productsCollectionPath);
+
+            onSnapshot(productsCollection, (snapshot) => {
+                const productList = [];
+                snapshot.forEach((doc) => {
+                    productList.push({ id: doc.id, ...doc.data() });
+                });
+                renderProducts(productList);
+            }, (error) => {
+                console.error("Error fetching products:", error);
+                loadingSpinner.classList.add('hidden');
+                noProductsMessage.classList.remove('hidden');
+            });
+        });
+    </script>
+</body>
+</html>
